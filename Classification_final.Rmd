@@ -1,0 +1,439 @@
+---
+title: "Clustering"
+output: pdf_document
+---
+- Packages
+```{r}
+#install.packages("plotly")
+#install.packages("minpack.lm")
+#install.packages("e1071")
+#install.packages("nls.multstart")
+#install.packages("randomForest")
+#install.packages("misc3d")
+#install.packages("reshape")
+library(e1071)
+library(nls.multstart)
+library(plotly)
+library(dplyr)
+library(minpack.lm)
+library(class)
+library(randomForest)
+library(MASS)
+library(rgl)
+#library(misc3d)
+#install.packages("plot3D")
+#library(plot3D)
+library(ggplot2)
+library(tidyr)
+library(reshape)
+```
+
+```{r}
+ppp <- read.csv("predictions.csv")
+ppp <- ppp[,-1]
+ppp
+result.data.2 <- read.csv("result_data_2.csv")
+result.data.2 <- result.data.2[,-c(1,2)]
+ppp1 <- rbind(data.frame("x" = rep(3,2211), "y" = ppp$X3.days),data.frame("x" = rep(7,2211),"y" = ppp$X7.days),data.frame("x" = rep(28,2211),"y" = ppp$X28.days))
+ppp1
+
+result.data.3 <- result.data.2[-which((result.data.2$X7d.strength..psi. - result.data.2$X3d.strength..psi.) < 0),]
+result.data.3
+# write.csv(result.data.3,"result_data_3.csv") 
+```
+
+
+- Clustering data
+```{r}
+true_data <- data.frame("3 days" = result.data.3$X3d.strength..psi.,"7 days" = result.data.3$X7d.strength..psi.,"28 days" = result.data.3$X28d.strength..psi.)
+cluster_data <- data.frame("3 days" = ppp$X3.days,"7 days" = ppp$X7.days,"28 days" = ppp$X28.days)
+cluster_data <- cluster_data[-which((result.data.2$X7d.strength..psi. - result.data.2$X3d.strength..psi.) < 0),]
+dim(cluster_data)
+true_fit <- rbind(data.frame("x" = rep(3,2194), "y" = true_data$X3.days),data.frame("x" = rep(7,2194),"y" = true_data$X7.days),data.frame("x" = rep(28,2194),"y" = true_data$X28.days))
+true_fit
+true_data
+
+```
+
+- K means clustering  (NO)
+```{r}
+clustering <- kmeans(cluster_data,centers = 2)
+length(clustering$cluster)
+clustering$betweenss
+clustering$withinss
+
+true_clustering <- kmeans(true_data,centers = 2)
+true_clustering
+true_clustering$betweenss
+true_clustering$withinss
+
+cluster_data[,4] <- data.frame("Clusters" = clustering$cluster)
+true_data[,4] <- data.frame("Clusters" = true_clustering$cluster)
+group_1 <- cluster_data[which(cluster_data$Clusters == 1),]
+group_2 <- cluster_data[which(cluster_data$Clusters == 2),]
+mean(abs(abs(group_1$X7.days) - abs(group_1$X3.days)) / 4)
+mean(abs(abs(group_1$X28.days) - abs(group_1$X7.days)) / (28-7))
+
+mean(abs(abs(group_2$X7.days) - abs(group_2$X3.days)) / 4)
+mean(abs(abs(group_2$X28.days) - abs(group_2$X7.days)) / (28-7))
+```
+
+- Visualization of points
+```{r}
+## Cluster data
+plot_ly(cluster_data,x = ~X3.days, y = ~X7.days, z = ~X28.days,color = ~clustering$cluster) %>% add_markers() %>% layout(scene = list(xaxis = list(title = "3 days"),yaxis = list(title = "7 days"),zaxis = list(title = "28 days")))
+## True data
+plot_ly(true_data,x = ~X3.days, y = ~X7.days, z = ~X28.days) %>% add_markers() %>% layout(scene = list(xaxis = list(title = "3 days"),yaxis = list(title = "7 days"),zaxis = list(title = "28 days")))
+```
+
+- Label
+```{r}
+# plot(ppp1)
+# plot(x = c(3,7,28),y = ppp[1,])
+# 
+# nls(y ~ log(a + b * x), data = true_fit, start = list(a = 0, b = 0))
+# 
+# nonlinear_fit <- nlsLM(y ~ log(a + b * x), data = data_frame("x" = c(3,7,28),"y" = unlist(true_data[1,])), start = list(a = 0, b = 0))
+# nonlinear_fit
+# plot(x = true_fit$x,y = true_fit$y)
+# lines(c(rep(3,2194),rep(7,2194),rep(28,2194)),predict(nonlinear_fit,newdata = data.frame(c(rep(3,2194),rep(7,2194),rep(28,2194)))))
+# 
+# nonlinear_fit <- nlsLM(y ~ exp(a + b * x), data = true_fit, start = list(a = 0, b = 0))
+# summary(nonlinear_fit)
+
+# label 1: y = e^(ax+b)
+# ml_avg <- lm(log(y) ~ x, data = true_fit)
+# coef(ml_avg)
+# coef_mat <- matrix(0,nrow = 2194,ncol = 2)
+# for(i in 1:2194){
+#   ml <- lm(log(y) ~ x ,data = data_frame("x" = c(3,7,28),"y" = unlist(true_data[i,])))
+#   coef_mat[i,] <- coef(ml)
+# }
+# label <- ifelse(coef_mat[,2] <= coef(ml_avg)[2],"Delayed","Early" )
+# result.data.3$label_1<- label
+# cluster_data$label_1 <- factor(label) 
+# label 2: y = log(ax+b)
+# ml_avg <- lm(exp(y) ~ x, data = true_fit)
+# coef(ml_avg)
+# coef_mat <- matrix(0,nrow = 2194,ncol = 2)
+# for(i in 1:2194){
+#   ml <- lm(exp(y) ~ x ,data = data_frame("x" = c(3,7,28),"y" = unlist(true_data[i,])))
+#   coef_mat[i,] <- coef(ml)
+# }
+# label <- ifelse(coef_mat[,2] <= coef(ml_avg)[2],"Delayed","Early" )
+# label
+# result.data.3$label_2<- label
+
+
+fit <- nls(y ~ A * (1 - exp(-b*x)), start=list(A=4010, b=0.1),data = true_fit)
+summary(fit)
+
+beta <- coefficients(fit)
+plot(true_fit$x, true_fit$y)
+curve((y = beta["A"] * (1 - exp(-beta["b"]*x))), add = T, col="Green", lwd=2)
+
+coef_mat <- matrix(0,nrow = 2194,ncol = 2)
+for(i in 1:2194){
+  nl.model <- nls(y ~ A * (1 - exp(-b*x)), start=list(A=true_data[i,3], b=0.1),data = data.frame("x" = c(3,7,28),"y" = unlist(true_data[i,])))
+  coef_mat[i,] <- coef(nl.model)
+}
+
+
+
+label <- ifelse(coef_mat[,2] <= mean(coef_mat[,2]),"Delayed","Early")
+table(label)
+result.data.3$label_1<- factor(label)
+result.data.3
+
+
+coef_mat[,2] <- 1/coef_mat[,2]
+coef_frame <- as.data.frame(coef_mat)
+colnames(coef_frame) <- c("A","Tao")
+coef_frame
+result.data.3$A <- coef_frame$A
+result.data.3$Tao <- coef_frame$Tao
+names(result.data.3)
+result.data.3
+
+store <- matrix(0,ncol = 3,nrow = 2194)
+for (i in 1:2194) {
+  store[i,] <- as.matrix(true_data[i,]/coef_mat[i,1])
+}
+store <- as.data.frame(store)
+colnames(store) <- c("3days","7days","28days")
+store
+aaa <- gather(store)
+aaa
+aaa[,1] <- c(rep(3,2194),rep(7,2194),rep(28,2194))
+aaa
+plot(aaa)
+colnames(aaa) <- c("x","y")
+aaa
+# plot(aaa[c(1,2195,4389),])
+# curve((y = (1 - exp(-coef_mat[1,2]*x))),add = T)
+# plot(aaa[c(1,2195,4389),])
+# plot((1 - exp(-coef_mat[,2]*aaa$x)),x = aaa$x)
+# curve((y = (1 - exp(-coef_mat[1,2]*x))),add = T)
+# p <- c()
+# for (i in 1:10) {
+#   p[i] <- plot((1 - exp(-coef_mat[i,2]*aaa$x)),x = aaa$x) + 
+#          curve((y = (1 - exp(-coef_mat[i,2]*x))),add = T)
+# }
+# aaa
+# ggplot(aaa) +
+#    geom_point() +
+#    geom_smooth(data = aaa, aes(x = aaa$x, y = aaa$y),y ~ (1 - exp(-coef_mat[,2]*x)),method = "auto")
+```
+
+- Classification
+```{r,warning=FALSE}
+cv_classification <- function(x){
+# Empty sets
+accuracy_1 <- c()
+accuracy_2 <- c()
+accuracy_3 <- c()
+accuracy_4 <- c()
+accuracy_5 <- c()
+accuracy_6 <- c()
+accuracy_7 <- c()
+# accuracy_8 <- c()
+# accuracy_9 <- c()
+# accuracy_10 <- c()
+
+# SVM*3, KNN, LDA, Logistic, Trees*4
+for(i in 1:20){
+  set.seed(5*i+1)
+  index <- sample(1:2194,1756)
+  train <- x[index,]; test <- x[-index,]
+  
+  # SVM model
+  t1 <- tune(svm, label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, kernel = "linear", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)), tunecontrol = tune.control(cross=5))
+  pred1 <- predict(t1$best.model, test[,1:15])
+  accuracy_1[i] <- sum(diag(table(predict = pred1, truth = test$label_1))) / nrow(test)
+  # SVM polynomial kernal
+  t2 <- tune(svm, label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, kernel = "polynomial", degree = 3, ranges = list(cost = c(0.001,0.01, 0.1, 1, 5, 10, 100)), tunecontrol = tune.control(cross=5))
+  pred2 <- predict(t2$best.model, test[,1:15])
+  accuracy_2[i] <- sum(diag(table(predict = pred2, truth = test$label_1))) / nrow(test)
+  # SVM gaussian kernal
+  t3 <- tune(svm , label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, kernel = "radial", ranges = list(cost = c(0.001,0.01, 0.1, 1, 5, 10, 100), gamma = c(0.1, 0.5, 1 ,2, 3 ,4)), tunecontrol = tune.control(cross=5))
+  pred3 <- predict(t3$best.model, test[,1:15])
+  accuracy_3[i] <- sum(diag(table(predict = pred3, truth = test$label_1))) / nrow(test)
+  
+  # KNN
+  t4 <- tune.knn(train[,1:15],train[,20], k = 1:9, tunecontrol = tune.control(cross=5))
+  pred4 <- knn(train[,1:15], test[,1:15], cl = train[,20], k = t4$best.parameters[[1]])
+  accuracy_4[i] <- sum(diag(table(predict = pred4, truth = test$label_1))) / nrow(test)
+  
+  # LDA
+  t5 <- lda(label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train)
+  pred5 <- predict(t5, test[,1:15])$class
+  accuracy_5[i] <- sum(diag(table(predict = pred5, truth = test$label_1))) / nrow(test)
+  
+  # Logistic
+  t6 <- glm(label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, family = binomial)
+  p <- predict(t6, test[,1:15], type = "response")
+  pred6 <- rep("Delayed", nrow(test))
+  pred6[p > 0.5] <- "Early"
+  pred6 <- as.factor(pred6)
+  accuracy_6[i] <- sum(diag(table(predict = pred6, truth = test$label_1))) / nrow(test)
+
+  # RF
+  t7 <- tune.randomForest(label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train,   importance = T, ntree = seq(100, 1000, by=100), mtry = c(2,3,4,5,6,7,8,9,10,11,12,13), tunecontrol = tune.control(cross=5))
+  pred7 <- predict(t7$best.model, test[,1:15])
+  accuracy_7[i] <- sum(diag(table(predict = pred7, truth = test$label_1))) / nrow(test)
+}
+
+# Table
+error_table <<- data.frame("Linear SVM" = mean(accuracy_1), "Polynomial SVM" = mean(accuracy_2), "Radial SVM" = mean(accuracy_3), "KNN" = mean(accuracy_4), "LDA" = mean(accuracy_5), "Logistic" = mean(accuracy_6), "RF" = mean(accuracy_7))
+print(error_table)
+}
+
+
+# Run the function
+ptm <- proc.time()
+cv_classification(result.data.3)
+proc.time() - ptm
+
+```
+
+- Linear SVM distance
+```{r}
+t1 <- tune(svm, label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = result.data.3, kernel = "linear", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)), tunecontrol = tune.control(cross=5),scale = F)
+t1$best.model
+pred1 <- predict(t1$best.model, newdata = result.data.3)
+accuracy_1 <- sum(diag(table(predict = pred1, truth = result.data.3$label_1))) / nrow(result.data.3)
+accuracy_1
+w <- as.matrix(t(t1$best.model$coefs)) %*% as.matrix(result.data.3[t1$best.model$index,-c(16:22)])
+b <- -t1$best.model$rho
+w
+b
+norm <- sqrt(sum(w^2))
+norm
+upper <-as.matrix(result.data.3[,-c(16:22)]) %*% t(w) + b
+distance <- upper/norm
+aaa <- data.frame("X_distance" = distance,"Y_Tau" = coef_frame$Tao)
+
+plot(aaa,pch = 1,cex = 0.25,col = ifelse(result.data.3$label_1 == "Early","blue","red"))
+abline(h = 1/beta[2])
+# plot(aaa,pch = 1,cex = 0.25,col = ifelse(true_data$label_1 == "Early",1,2),xlim = c(0,20),ylim = c(3.4,3.6))
+# abline(h = 1/beta[2])
+# plot(aaa,pch = 1,cex = 0.25,col = ifelse(true_data$label_1 == "Early",1,2),xlim = c(600,1200),ylim = c(3.4,3.6))
+# abline(h = 1/beta[2])
+# plot(aaa,pch = 1,cex = 0.25,col = ifelse(true_data$label_1 == "Early",1,2),xlim = c(1200,2000),ylim = c(3.4,3.6))
+# abline(h = 1/beta[2])
+# plot(aaa,pch = 1,cex = 0.25,col = ifelse(true_data$label_1 == "Early",1,2),xlim = c(2000,3500),ylim = c(3.4,3.6))
+# abline(h = 1/beta[2])
+
+# plot(coef_frame$Tao)
+# abline(h = 1/beta[2])
+# pred1
+
+ggplot(data = aaa,aes(x = aaa$X_distance,y=aaa$Y_Tau)) + geom_point(color =ifelse(result.data.3$label_1 == "Early",1,2)) + geom_hline(yintercept  = 1/beta[2]) + ggtitle("             Scatter Plot for Tau and Distance from points to the hyperplane") +
+  xlab("Distance") + ylab("Tau")
+
+
+# 1.1
+ggplot(data = aaa,aes(x = aaa$X_distance,y=aaa$Y_Tau)) + geom_point(color =ifelse(pred1 == "Early",1,2)) + geom_hline(yintercept  = mean(coef_mat[,2])) + ggtitle("             Scatter Plot for Tau and Distance from points to the hyperplane") +
+  xlab("Distance") + ylab("Tau")
+
+
+# grid<- expand.grid(seq(from = min(true_data$X3.days),to = max(true_data$X3.days),length.out = 150),
+#             seq(from = min(true_data$X7.days),to = max(true_data$X7.days),length.out = 150))
+# z <- (-b - w[1]*grid[,1] - w[2]*grid[,2])/w[3]
+# plot3d(x=grid[,1],y=grid[,2],z=z,alpha = 1,xlab = "3 Days",ylab = "7 Days",zlab = "28 Days",size = 0.1,col = "grey",main = "Linear Boundary Plot",top = T)
+# 
+# points3d(true_data[which(as.double(pred1) == 1),][,1],true_data[which(as.double(pred1) == 1),][,2],true_data[which(as.double(pred1) == 1),][,3],col = "red")
+# points3d(true_data[which(as.double(pred1) == 2),][,1],test[which(as.double(pred1) == 2),][,2],true_data[which(as.double(pred1) == 2),][,3],col = "blue")
+# legend3d("topright", legend = paste(c('Delayed', 'Early')), pch = 10, col = c("red","blue"), cex=1, inset=c(0.02))
+# snapshot3d(filename = '3dplot.png', fmt = 'png')
+
+
+```
+
+- 50 Bins, whole data set
+```{r}
+width <- (max(aaa$X_distance) - min(aaa$X_distance)) / 50
+lower <- min(aaa$X_distance)
+upper <- min(aaa$X_distance) + width
+index <- list()
+for(i in 1:50){
+  new_upper <- upper + (i-1)*width
+  new_lower <- lower + (i-1)*width
+  index[[i]] <- which(aaa$X_distance >= new_lower & aaa$X_distance < new_upper)
+}
+index[[50]] <- c(index[[50]], which(aaa$X_distance == max(aaa$X_distance)))
+#index
+
+x_mean <- c()
+y_mean <- c()
+for(i in 1:50){
+  x_mean[i] <- mean(aaa$X_distance[index[[i]]])
+  y_mean[i] <- mean(aaa$Y_Tau[index[[i]]])
+}
+dat <- data.frame(x = x_mean, y = y_mean)
+
+# plot(dat)
+# abline(h = 1/beta[2])
+
+# ggplot(data=dat, aes(x=x,y=y)) + geom_point(color=ifelse(x_mean >= 0 ,1,2)) + geom_hline(yintercept=1/beta[2]) + ggtitle("                 Avg Tau vs Avg Distance") + xlab("Distance") + ylab("Tau")
+
+# 1.2
+ggplot(data=dat, aes(x=x,y=y)) + geom_point(color=ifelse(x_mean >= 0 ,1,2)) + geom_hline(yintercept=mean(coef_mat[,2])) + ggtitle("                 Avg Tau vs Avg Distance") + xlab("Distance") + ylab("Tau")
+```
+
+- Training set
+```{r}
+set.seed(34567890)
+index <- sample(1:2194,1756)
+train <- result.data.3[index,]; test <- result.data.3[-index,]
+t2 <- tune(svm, label_1 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, kernel = "linear", ranges = list(cost=c(0.001, 0.01, 0.1, 1, 5, 10, 100)), tunecontrol = tune.control(cross=5),scale = F)
+t2$best.model
+pred2 <- predict(t2$best.model, newdata = train)
+accuracy_2 <- sum(diag(table(predict = pred2, truth = train$label_1))) / nrow(train)
+accuracy_2
+
+pred3 <- predict(t2$best.model, newdata = test)
+accuracy_3 <- sum(diag(table(predict = pred3, truth = test$label_1))) / nrow(test)
+accuracy_3
+
+w <- as.matrix(t(t2$best.model$coefs)) %*% as.matrix(train[t2$best.model$index,-c(16:22)])
+b <- -t2$best.model$rho
+w
+b
+norm <- sqrt(sum(w^2))
+norm
+upper <-as.matrix(train[,-c(16:22)]) %*% t(w) + b
+distance <- upper/norm
+bbb <- data.frame("X_distance" = distance,"Y_Tau" = train$Tao)
+
+# 2.1
+ggplot(data = bbb,aes(x = bbb$X_distance,y=bbb$Y_Tau)) + geom_point(color =ifelse(pred2 == "Early",1,2)) + geom_hline(yintercept  = mean(coef_mat[,2])) + ggtitle("             Scatter Plot for Tau and Distance from points to the hyperplane") +
+  xlab("Distance") + ylab("Tau")
+
+
+width <- (max(bbb$X_distance) - min(bbb$X_distance)) / 50
+lower <- min(bbb$X_distance)
+upper <- min(bbb$X_distance) + width
+index <- list()
+for(i in 1:50){
+  new_upper <- upper + (i-1)*width
+  new_lower <- lower + (i-1)*width
+  index[[i]] <- which(bbb$X_distance >= new_lower & bbb$X_distance < new_upper)
+}
+index[[50]] <- c(index[[50]], which(bbb$X_distance == max(bbb$X_distance)))
+#index
+
+x_mean <- c()
+y_mean <- c()
+for(i in 1:50){
+  x_mean[i] <- mean(bbb$X_distance[index[[i]]])
+  y_mean[i] <- mean(bbb$Y_Tau[index[[i]]])
+}
+dat2 <- data.frame(x = x_mean, y = y_mean)
+
+# 2.2
+ggplot(data=dat2, aes(x=x,y=y)) + geom_point(color=ifelse(x_mean >= 0 ,1,2)) + geom_hline(yintercept=mean(coef_mat[,2])) + ggtitle("                 Avg Tau vs Avg Distance (Training)") + xlab("Distance") + ylab("Tau")
+```
+
+
+- Testing set
+```{r}
+w <- as.matrix(t(t2$best.model$coefs)) %*% as.matrix(train[t2$best.model$index,-c(16:22)])
+b <- -t2$best.model$rho
+w
+b
+norm <- sqrt(sum(w^2))
+norm
+upper <-as.matrix(test[,-c(16:22)]) %*% t(w) + b
+distance <- upper/norm
+ccc <- data.frame("X_distance" = distance,"Y_Tau" = test$Tao)
+
+# 3.1
+ggplot(data = ccc,aes(x = ccc$X_distance,y=ccc$Y_Tau)) + geom_point(color =ifelse(pred3 == "Early",1,2)) + geom_hline(yintercept  = mean(coef_mat[,2])) + ggtitle("             Scatter Plot for Tau and Distance from points to the hyperplane") +
+  xlab("Distance") + ylab("Tau")
+
+
+width <- (max(ccc$X_distance) - min(ccc$X_distance)) / 50
+lower <- min(ccc$X_distance)
+upper <- min(ccc$X_distance) + width
+index <- list()
+for(i in 1:50){
+  new_upper <- upper + (i-1)*width
+  new_lower <- lower + (i-1)*width
+  index[[i]] <- which(ccc$X_distance >= new_lower & ccc$X_distance < new_upper)
+}
+index[[50]] <- c(index[[50]], which(ccc$X_distance == max(ccc$X_distance)))
+#index
+
+x_mean <- c()
+y_mean <- c()
+for(i in 1:50){
+  x_mean[i] <- mean(ccc$X_distance[index[[i]]])
+  y_mean[i] <- mean(ccc$Y_Tau[index[[i]]])
+}
+dat3 <- data.frame(x = x_mean, y = y_mean)
+
+# 3.2
+ggplot(data=dat3, aes(x=x,y=y)) + geom_point(color=ifelse(x_mean >= 0 ,1,2)) + geom_hline(yintercept=mean(coef_mat[,2])) + ggtitle("                 Avg Tau vs Avg Distance (Test)") + xlab("Distance") + ylab("Tau")
+```
+

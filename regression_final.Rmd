@@ -1,0 +1,723 @@
+---
+title: "Untitled"
+author: "Yongzhe Wang"
+output: pdf_document
+---
+
+- Packages 
+```{r}
+options(java.parameters = "-Xmx8g")
+#install.packages("lattice")
+#install.packages("nnet")
+#install.packages("mice")
+#install.packages("mi")
+#install.packages("Amelia")
+#install.packages("car")
+#install.packages("corrplot")
+#install.packages("boot")
+#install.packages("OutlierDetection") 
+#install.packages("extraTrees")
+#install.packages("caret")
+#install.packages("neuralnet")
+#install.packages("randomForest")
+#install.packages("gbm")
+#install.packages("leaps")
+#install.packages("glmnet")
+#install.packages("doParallel")
+#install.packages("foreach")
+#install.packages("pROC")
+#install.packages("xgboost")
+library(xgboost)
+library(glmnet)
+library(doParallel)
+library(foreach)
+library(pROC)
+library(gbm)
+library(randomForest)
+library(neuralnet)
+#library(OutlierDetection)
+library(lattice)
+library(MASS)
+library(nnet)
+library(mice)
+library(mi)
+library(car)
+library(corrplot)
+library(boot)
+library(caret)
+library(extraTrees)
+library(leaps)
+library(kernlab)
+library(nnet)
+library(rJava)
+#load("RData")
+```
+
+- Read result.data.3
+```{r}
+result.data.3 <- read.csv("result_data_3.csv")
+result.data.3 <- result.data.3[,-1]
+result.data.3
+```
+
+- Linear model for 3 days (refine)
+```{r}
+summary(p1  <- powerTransform(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct, data = result.data.2))
+lmmodel_3 <- lm(X3d.strength..psi.^1.29 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + Fe2O3...., data = result.data.2)
+summary(lmmodel_3)
+plot(lmmodel_3)
+
+```
+
+- KNN model for 3 days (refine)
+```{r}
+set.seed(3)
+ctrl <- trainControl(method = "cv", number = 5)
+train(x = result.data.2[,c(1:5,8,14)], y = result.data.2$X3d.strength..psi., method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k
+KNN <- knnreg(x = result.data.2[,c(1:5,8,14)], y = result.data.2$X3d.strength..psi., k = 7)
+KNN.pred<-predict(KNN,result.data.2[,c(1:5,8,14)])
+SSE <- sum( (result.data.2$X3d.strength..psi. - KNN.pred)^2 )
+SST <- sum( (result.data.2$X3d.strength..psi. - mean(result.data.2$X3d.strength..psi.))^2 )
+R_sq <- 1 - SSE/SST
+R_sq
+```
+
+- Bagged for 3 days (refine)
+```{r}
+control <- trainControl(method = "cv",number = 5,search = "grid")
+set.seed(3)
+tunegrid <- expand.grid(mtry = 7)
+bagged_train <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid, trControl = control)
+print(bagged_train)
+bagged_train$results$Rsquared
+```
+
+- Random forests for 3 days (refine)
+```{r}
+control_rf <- trainControl(method = "repeatedcv",number = 5,repeats = 3,search = "grid")
+set.seed(3)
+tunegrid_rf <- expand.grid(mtry = c(2:7))
+rf_train <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+print(rf_train)
+```
+
+- Boosting for 3 days (refine)
+```{r}
+set.seed(5)
+control_boosting <- trainControl(method = "repeatedcv",number = 5,repeats = 10)
+boosting_train <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = result.data.2,method = "gbm", verbose = F, trControl = control_boosting)
+boosting_train$bestTune
+
+```
+
+- Extremely random forests for 3 days (refine)
+```{r}
+et_grid <- expand.grid(mtry = 2:7,numRandomCuts = 1:5)
+set.seed(3)
+control_et = trainControl(method = "cv", number = 5)
+et_train <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = result.data.2,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+et_train
+```
+
+- Linear model for 7 days (refine)
+```{r}
+summary(p7 <- powerTransform(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct, data = result.data.3))
+lmmodel_7 <- lm(X7d.strength..psi.^1.61 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct, data = result.data.3)
+summary(lmmodel_7)
+plot(lmmodel_7)
+```
+
+- KNN for 7 days (refine)
+```{r}
+set.seed(3)
+ctrl <- trainControl(method = "cv", number = 5)
+train(x = result.data.2[,c(1:8)], y = result.data.2$X7d.strength..psi., method = "knn" , metric = "RMSE", trControl = ctrl)
+KNN <- knnreg(x = result.data.2[,1:8], y = result.data.2$X7d.strength..psi., k = 9)
+KNN.pred<-predict(KNN,result.data.2[,1:8])
+SSE <- sum( (result.data.2$X7d.strength..psi. - KNN.pred)^2 )
+SST <- sum( (result.data.2$X7d.strength..psi. - mean(result.data.2$X7d.strength..psi.))^2 )
+R_sq <- 1 - SSE/SST
+R_sq
+```
+
+- Bagged for 7 days (refine)
+```{r}
+control <- trainControl(method = "cv",number = 5,search = "grid")
+set.seed(3)
+tunegrid <- expand.grid(mtry = 8)
+bagged_train <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid, trControl = control)
+print(bagged_train)
+```
+
+- Boosting for 7 days (refine)
+```{r}
+set.seed(3)
+control_boosting <- trainControl(method = "repeatedcv",number = 5,repeats = 10)
+boosting_train <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = result.data.2,method = "gbm", verbose = F, trControl = control_boosting)
+boosting_train
+```
+
+- Random forests for 7 days (refine)
+```{r}
+control_rf <- trainControl(method = "repeatedcv",number = 5,repeats = 3,search = "grid")
+set.seed(3)
+tunegrid_rf <- expand.grid(mtry = c(2:8))
+rf_train <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+print(rf_train)
+```
+
+- Extremely random forests for 7 days (refine)
+```{r}
+et_grid <- expand.grid(mtry = 2:8,numRandomCuts = 1:5)
+set.seed(3)
+control_et = trainControl(method = "cv", number = 5)
+et_train <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = result.data.2,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+et_train
+```
+
+- Linear model for 28 days (refine)
+```{r}
+summary(p28 <- powerTransform(X28d.strength..psi. ~  FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = result.data.3))
+lmmodel_28 <- lm(X28d.strength..psi.^1.54 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = result.data.3)
+summary(lmmodel_28)
+plot(lmmodel_28)
+vif(lmmodel_28)
+```
+
+- KNN for 28 days (refine)
+```{r}
+set.seed(3)
+ctrl <- trainControl(method = "cv", number = 5)
+train(x = result.data.2[,c(1:4,8,9,13,14)], y = result.data.2$X28d.strength..psi., method = "knn" , metric = "RMSE", trControl = ctrl)
+KNN <- knnreg(x = result.data.2[,c(1:4,8,9,13,14)], y = result.data.2$X28d.strength..psi., k = 9)
+KNN.pred<-predict(KNN,result.data.2[,c(1:4,8,9,13,14)])
+SSE <- sum( (result.data.2$X28d.strength..psi. - KNN.pred)^2 )
+SST <- sum( (result.data.2$X28d.strength..psi. - mean(result.data.2$X28d.strength..psi.))^2 )
+R_sq <- 1 - SSE/SST
+R_sq
+```
+
+- Bagged for 28 days (refine)
+```{r}
+control <- trainControl(method = "cv",number = 5,search = "grid")
+set.seed(3)
+tunegrid <- expand.grid(mtry = 8)
+bagged_train <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid, trControl = control)
+print(bagged_train)
+```
+
+- Boosting for 28 days (refine)
+```{r}
+set.seed(3)
+control_boosting <- trainControl(method = "repeatedcv",number = 5,repeats = 10)
+boosting_train <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = result.data.2,method = "gbm", verbose = F, trControl = control_boosting)
+boosting_train
+```
+
+- Random forests for 28 days (refine)
+```{r}
+control_rf <- trainControl(method = "repeatedcv",number = 5,repeats = 3,search = "grid")
+set.seed(3)
+tunegrid_rf <- expand.grid(mtry = c(2:8))
+rf_train <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = result.data.2,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+print(rf_train)
+```
+
+- Extremely random forests for 28 days (refine)
+```{r}
+et_grid <- expand.grid(mtry = 2:8,numRandomCuts = 1:5)
+set.seed(3)
+control_et = trainControl(method = "cv", number = 5)
+et_train <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = result.data.2,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+et_train
+```
+
+- Cross validation
+```{r}
+cv_function <- function(x){
+  # Empty sets
+  MSE_linear_3 <- c()
+  MSE_linear_7 <- c()
+  MSE_linear_28 <- c()
+  MSE_KNN_3 <- c()
+  MSE_KNN_7 <- c()
+  MSE_KNN_28 <- c()
+  MSE_bagged_3 <- c()
+  MSE_bagged_7 <- c()
+  MSE_bagged_28 <- c()
+  MSE_Xgboost_3 <- c()
+  MSE_Xgboost_7 <- c()
+  MSE_Xgboost_28 <- c()
+  MSE_RF_3 <- c()
+  MSE_RF_7 <- c()
+  MSE_RF_28 <- c()
+  MSE_ET_3 <- c()
+  MSE_ET_7 <- c()
+  MSE_ET_28 <- c()
+  R2_linear_3 <- c()
+  R2_linear_7 <- c()
+  R2_linear_28 <- c()
+  R2_KNN_3 <- c()
+  R2_KNN_7 <- c()
+  R2_KNN_28 <- c()
+  R2_bagged_3 <- c()
+  R2_bagged_7 <- c()
+  R2_bagged_28 <- c()
+  R2_Xgboost_3 <- c()
+  R2_Xgboost_7 <- c()
+  R2_Xgboost_28 <- c()
+  R2_RF_3 <- c()
+  R2_RF_7 <- c()
+  R2_RF_28 <- c()
+  R2_ET_3 <- c()
+  R2_ET_7 <- c()
+  R2_ET_28 <- c()
+  
+  # for loop
+  for(i in 1:50){
+  set.seed(10*i + (i^2 + 1))
+  index <- sample(1:2194,1756); train <- x[index,]; test<- x[-index,]
+  test_y_3 <- test$X3d.strength..psi.; test_y_7 <- test$X7d.strength..psi.; test_y_28 <- test$X28d.strength..psi.
+  # linear model
+  lmmodel_3 <- lm(X3d.strength..psi.^1.29 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + Fe2O3...., data = train)
+  yhat3 <- (predict(lmmodel_3,newdata = test))^(1/1.29)
+  MSE_linear_3[i] <- mean((test[,17] - yhat3)^2)
+  R2_linear_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  lmmodel_7 <- lm(X7d.strength..psi.^1.61 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct, data = train)
+  yhat7 <- (predict(lmmodel_7,newdata = test))^(1/1.61)
+  MSE_linear_7[i] <- mean((test[,18] - yhat7)^2)
+  R2_linear_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  lmmodel_28 <- lm(X28d.strength..psi.^1.54 ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = train)
+  yhat28 <- (predict(lmmodel_28,newdata = test))^(1/1.54)
+  MSE_linear_28[i] <- mean((test[,19] - yhat28)^2)
+  R2_linear_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # KNN
+  ctrl <- trainControl(method = "cv", number = 5)
+  KNN_3 <- knnreg(x = train[,c(1:5,8,14)], y = train[,17], k = train(x = train[,c(1:5,8,14)], y = train[,17], method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k)
+  yhat3 <- predict(KNN_3, newdata = test[,c(1:5,8,14)])
+  MSE_KNN_3[i] <- mean((yhat3 - test[,17])^2)
+  R2_KNN_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  KNN_7 <- knnreg(x = train[,c(1:8)], y = train[,18], k = train(x = train[,c(1:8)], y = train[,18], method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k)
+  yhat7 <- predict(KNN_7, newdata = test[,1:8])
+  MSE_KNN_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_KNN_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  KNN_28 <- knnreg(x = train[,c(1:4,8,9,13,14)], y = train[,19], k = train(x = train[,c(1:4,8,9,13,14)], y = train[,19], method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k)
+  yhat28 <- predict(KNN_28, newdata = test[,c(1:4,8,9,13,14)])
+  MSE_KNN_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_KNN_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Bagged
+  bagged_3 <- randomForest(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,mtry = 7,data = train,importance = T)
+  yhat3 <- predict(bagged_3,newdata = test)
+  MSE_bagged_3[i] <- mean((yhat3 - test[,17])^2)
+  R2_bagged_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  bagged_7 <- randomForest(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,mtry = 8,data = train,importance = T)
+  yhat7 <- predict(bagged_7,newdata = test)
+  MSE_bagged_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_bagged_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  bagged_28 <- randomForest(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,mtry = 8,data = train,importance = T)
+  yhat28 <- predict(bagged_28,newdata = test)
+  MSE_bagged_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_bagged_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # XgBoosting
+  Xgboost_3 <-train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3....
+  + SiO2.... + K2O_pct + C2S_pct, data = train, method = "xgbTree",
+  trControl = trainControl("cv", number = 5))
+  yhat3 <- predict(Xgboost_3,newdata = test)
+  MSE_Xgboost_3[i] <- mean((yhat3 - test[,17])^2)
+  R2_Xgboost_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  
+  Xgboost_7 <-train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3....   + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct, data = train, method = "xgbTree",
+  trControl = trainControl("cv", number = 5))
+  yhat7 <- predict(Xgboost_7,newdata = test)
+  MSE_Xgboost_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_Xgboost_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  Xgboost_28 <-train(
+  X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = train, method = "xgbTree",
+  trControl = trainControl("cv", number = 5)
+  )
+  yhat28 <- predict(Xgboost_28,newdata = test)
+  MSE_Xgboost_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_Xgboost_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Random forest
+  control_rf <- trainControl(method = "repeatedcv",number = 5,repeats = 3,search = "grid")
+  
+  tunegrid_rf <- expand.grid(mtry = c(2:7))
+  rf_3 <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = train,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+  yhat3 <- predict(rf_3,newdata = test)
+  MSE_RF_3[i] <- mean((yhat3 - test[,17])^2)
+  R2_RF_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  tunegrid_rf <- expand.grid(mtry = c(2:8))
+  rf_7 <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = train,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+  yhat7 <- predict(rf_7,newdata = test)
+  MSE_RF_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_RF_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  tunegrid_rf <- expand.grid(mtry = c(2:8))
+  rf_28 <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = train,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+  yhat28 <- predict(rf_28,newdata = test)
+  MSE_RF_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_RF_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Extremely random forests
+  control_et = trainControl(method = "cv", number = 5)
+  
+  et_grid <- expand.grid(mtry = 2:7,numRandomCuts = 1:5)
+  et_3 <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + K2O_pct + C2S_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat3 <- predict(et_3,newdata = test)
+  MSE_ET_3[i] <- mean((yhat3 - test[,17])^2)
+  R2_ET_3[i] <- 1 - sum((yhat3 - test_y_3)^2) / sum((test_y_3 - mean(test_y_3))^2)
+  
+  et_grid <- expand.grid(mtry = 2:8,numRandomCuts = 1:5)
+  et_7 <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3S_pct + C2S_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat7 <- predict(et_7,newdata = test)
+  MSE_ET_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_ET_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  et_grid <- expand.grid(mtry = 2:8,numRandomCuts = 1:5)
+  et_28 <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + C3A_pct + C2S_pct + Na2O_pct + K2O_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat28 <- predict(et_28,newdata = test)
+  MSE_ET_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_ET_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  }
+  # mean of sets
+  sumtable <<- data.frame("Linear_MSE" = 0.00689476*sqrt(c(mean(MSE_linear_3),mean(MSE_linear_7),mean(MSE_linear_28))),"Linear_R2" = c(mean(R2_linear_3),mean(R2_linear_7),mean(R2_linear_28)),"KNN_MSE" = 0.00689476*sqrt(c(mean(MSE_KNN_3),mean(MSE_KNN_7),mean(MSE_KNN_28))),"KNN_R2" = c(mean(R2_KNN_3),mean(R2_KNN_7),mean(R2_KNN_28)), "Bagged_MSE" = 0.00689476*sqrt(c(mean(MSE_bagged_3),mean(MSE_bagged_7),mean(MSE_bagged_28))), "Bagged _R2" = c(mean(R2_bagged_3),mean(R2_bagged_7),mean(R2_bagged_28)), "Xgboost_MSE" = 0.00689476*sqrt(c(mean(MSE_Xgboost_3),mean(MSE_Xgboost_7),mean(MSE_Xgboost_28))),"Xgboost_R2" = c(mean(R2_Xgboost_3),mean(R2_Xgboost_7),mean(R2_Xgboost_28)),"RF_MSE" = 0.00689476*sqrt(c(mean(MSE_RF_3),mean(MSE_RF_7),mean(MSE_RF_28))),"RF_R2" = c(mean(R2_RF_3),mean(R2_RF_7),mean(R2_RF_28)) ,"ET_MSE" = 0.00689476*sqrt(c(mean(MSE_ET_3),mean(MSE_ET_7),mean(MSE_ET_28))),"ET_R2" = c(mean(R2_ET_3),mean(R2_ET_7),mean(R2_ET_28)))
+  
+print(sumtable)
+} 
+
+
+ptm <- proc.time()
+cv_function(result.data.3)
+proc.time() - ptm
+
+sumtable$Linear_full_MSE <- total$Linear_full_MSE
+sumtable$Linear_full_R2 <- total$Linear_full_R2
+sumtable
+```
+
+- Gaussian Process Regression
+```{r}
+ggpred_3_R <- c()
+ggpred_7_R <- c()
+ggpred_28_R <- c()
+for (i in 1:10) {
+set.seed(i*10+(i^2+41))
+index <- sample(1:2194,1756); train <- result.data.3[index,]; test<- result.data.3[-index,]
+test_y_3 <- test$X3d.strength..psi.; test_y_7 <- test$X7d.strength..psi.; test_y_28 <- test$X28d.strength..psi.
+
+gpr_grid <- expand.grid(sigma = c(0.001,0.0015,0.012,0.015,0.01,0.05,0.1,0.5,0.9,1,2))
+ctrl <- trainControl(method = "cv",number = 5)
+
+gpr_3 <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_3 <- predict(gpr_3,newdata = test)
+ggpred_3_R[i] <- 1 - sum((ggpred_3 - test$X3d.strength..psi.)^2) / sum((test$X3d.strength..psi. - mean(test$X3d.strength..psi.))^2)
+
+gpr_7 <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_7 <- predict(gpr_7,newdata = test)
+ggpred_7_R[i] <- 1 - sum((ggpred_7 - test$X7d.strength..psi.)^2) / sum((test$X7d.strength..psi. - mean(test$X7d.strength..psi.))^2)
+
+gpr_28 <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_28 <- predict(gpr_28,newdata = test)
+ggpred_28_R[i] <- 1 - sum((ggpred_28 - test$X28d.strength..psi.)^2) / sum((test$X28d.strength..psi. - mean(test$X28d.strength..psi.))^2)
+
+}
+
+# ggg <- gausspr(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train,type = "regression",kernel = "rbfdot",cross = 5,sigma = 1)
+
+mean(ggpred_3_R)
+mean(ggpred_7_R)
+mean(ggpred_28_R)
+
+```
+
+- ANN and GPR
+```{r}
+R2_ANN_3 <- c()
+ANN_3_rmse <-c()
+R2_ANN_7 <- c()
+ANN_7_rmse <- c()
+R2_ANN_28 <- c()
+ANN_28_rmse <- c()
+ggpred_3_R <- c()
+ggpred_7_R <- c()
+ggpred_28_R <- c()
+
+for(i in 1:30){
+set.seed(10*i + (i^2 + 1))
+aaaaa<-as.data.frame(scale(result.data.3))
+index <- sample(1:2194,1756); train <- aaaaa[index,]; test<- aaaaa[-index,]
+test_y_3 <- test$X3d.strength..psi.; test_y_7 <- test$X7d.strength..psi.; test_y_28 <- test$X28d.strength..psi.
+my.grid <- expand.grid(.decay = c(0.5,0.1,0.01,0.001), .size = c(9,10,11,12,13,14))
+gpr_grid <- expand.grid(sigma = c(0.001,0.0015,0.012,0.015,0.01,0.05,0.1,0.5,0.9,1,2))
+ctrl <- trainControl(method = "cv",number = 5)
+
+## ANN 
+ANN_3 <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train,method = "nnet", maxit = 10000, tuneGrid = my.grid, trace = F, linout = 1,trControl = ctrl)  
+ANN_3_pred <- predict(ANN_3, newdata = test)
+ANN_3_rmse[i] <- sqrt(mean((ANN_3_pred - test$X3d.strength..psi.)^2)) 
+R2_ANN_3[i] <- 1 - sum((ANN_3_pred - test$X3d.strength..psi.)^2) / sum((test$X3d.strength..psi. - mean(test$X3d.strength..psi.))^2)
+
+ANN_7 <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train,method = "nnet", maxit = 10000, tuneGrid = my.grid, trace = F, linout = 1,trControl = ctrl)  
+ANN_7_pred <- predict(ANN_7, newdata = test)
+ANN_7_rmse[i] <- sqrt(mean((ANN_7_pred - test$X7d.strength..psi.)^2)) 
+R2_ANN_7[i] <- 1 - sum((ANN_7_pred - test$X7d.strength..psi.)^2) / sum((test$X7d.strength..psi. - mean(test$X7d.strength..psi.))^2)
+
+ANN_28 <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train,method = "nnet", maxit = 10000, tuneGrid = my.grid, trace = F, linout = 1,trControl = ctrl)  
+ANN_28_pred <- predict(ANN_28, newdata = test)
+ANN_28_rmse[i] <- sqrt(mean((ANN_28_pred - test$X28d.strength..psi.)^2)) 
+R2_ANN_28[i] <- 1 - sum((ANN_28_pred - test$X28d.strength..psi.)^2) / sum((test$X28d.strength..psi. - mean(test$X28d.strength..psi.))^2)
+
+## GPR
+gpr_3 <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_3 <- predict(gpr_3,newdata = test)
+ggpred_3_R[i] <- 1 - sum((ggpred_3 - test$X3d.strength..psi.)^2) / sum((test$X3d.strength..psi. - mean(test$X3d.strength..psi.))^2)
+
+gpr_7 <- train(X7d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_7 <- predict(gpr_7,newdata = test)
+ggpred_7_R[i] <- 1 - sum((ggpred_7 - test$X7d.strength..psi.)^2) / sum((test$X7d.strength..psi. - mean(test$X7d.strength..psi.))^2)
+
+gpr_28 <- train(X28d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "gaussprRadial",tuneGrid = gpr_grid,trControl = ctrl)
+ggpred_28 <- predict(gpr_28,newdata = test)
+ggpred_28_R[i] <- 1 - sum((ggpred_28 - test$X28d.strength..psi.)^2) / sum((test$X28d.strength..psi. - mean(test$X28d.strength..psi.))^2)
+
+  
+}
+mean(R2_ANN_3) 
+mean(R2_ANN_7) 
+mean(R2_ANN_28) 
+mean(ggpred_3_R)
+mean(ggpred_7_R)
+mean(ggpred_28_R)
+
+
+# rctrlR <- trainControl(method = "cv", number = 3, returnResamp = "all", search = "random")
+# test_reg_cv_model <- train(X3d.strength..psi. ~ FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "neuralnet", trControl = rctrlR,
+#                            tuneGrid = data.frame(layer1 = 2:9, layer2 = 2:3, layer3 = 1),
+#                            rep = 2,
+#                            threshold = 0.1,        
+#                            stepmax = 1e+05,
+#                            preProc = c("center", "scale"))
+```
+
+- Time series analysis
+```{r}
+summary(p7 <- powerTransform(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3A_pct + C2S_pct, data = result.data.3))
+TA_lm_7days <- lm(X7d.strength..psi.^1.29 ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3A_pct + C2S_pct, data = result.data.3)
+summary(TA_lm_7days)
+plot(TA_lm_7days)
+lm.beta(TA_lm_7days)
+
+summary(p28 <- powerTransform(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + SiO2.... + C3S_pct + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = result.data.3))
+TA_lm_28days <- lm(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + SiO2.... + C3S_pct + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = result.data.3)
+summary(TA_lm_28days)
+plot(TA_lm_28days)
+lm.beta(TA_lm_28days)
+```
+
+- CV function for time series
+```{r}
+cv_function_time_series <- function(x){
+  # Empty sets
+  MSE_linear_7 <- c()
+  MSE_linear_28 <- c()
+  MSE_KNN_7 <- c()
+  MSE_KNN_28 <- c()
+  MSE_bagged_7 <- c()
+  MSE_bagged_28 <- c()
+  MSE_Xgboost_3 <- c()
+  MSE_Xgboost_7 <- c()
+  MSE_Xgboost_28 <- c()
+  MSE_RF_7 <- c()
+  MSE_RF_28 <- c()
+  MSE_ET_7 <- c()
+  MSE_ET_28 <- c()
+  R2_linear_7 <- c()
+  R2_linear_28 <- c()
+  R2_KNN_7 <- c()
+  R2_KNN_28 <- c()
+  R2_bagged_7 <- c()
+  R2_bagged_28 <- c()
+  R2_Xgboost_7 <- c()
+  R2_Xgboost_28 <- c()
+  R2_RF_7 <- c()
+  R2_RF_28 <- c()
+  R2_ET_7 <- c()
+  R2_ET_28 <- c()
+  
+  # for loop
+  for(i in 1:30){
+  set.seed(10*i + (i^2 + 1))
+  index <- sample(1:2194,1756); train <- x[index,]; test<- x[-index,]
+  test_y_3 <- test$X3d.strength..psi.; test_y_7 <- test$X7d.strength..psi.; test_y_28 <- test$X28d.strength..psi.
+  # linear model
+  
+  lmmodel_7 <- lm(X7d.strength..psi.^1.29 ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3.... + C3A_pct + C2S_pct, data = train)
+  yhat7 <- (predict(lmmodel_7,newdata = test))^(1/1.61)
+  MSE_linear_7[i] <- mean((test[,18] - yhat7)^2)
+  R2_linear_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  lmmodel_28 <- lm(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + SiO2.... + C3S_pct + C3A_pct + C2S_pct + Na2O_pct + K2O_pct, data = train)
+  yhat28 <- (predict(lmmodel_28,newdata = test))^(1/1.54)
+  MSE_linear_28[i] <- mean((test[,19] - yhat28)^2)
+  R2_linear_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # KNN
+  
+  KNN_7 <- knnreg(x = train[,c(1:15,17)], y = train[,18], k = train(x = train[,c(1:8)], y = train[,18], method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k)
+  yhat7 <- predict(KNN_7, newdata = test[,1:15,17])
+  MSE_KNN_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_KNN_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  KNN_28 <- knnreg(x = train[,c(1:5,18)], y = train[,19], k = train(x = train[,c(1:15,18)], y = train[,19], method = "knn" , metric = "RMSE", trControl = ctrl)$bestTune$k)
+  yhat28 <- predict(KNN_28, newdata = test[,c(1:15,18)])
+  MSE_KNN_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_KNN_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Bagged
+  
+  bagged_7 <- randomForest(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,mtry = 16,data = train,importance = T)
+  yhat7 <- predict(bagged_7,newdata = test)
+  MSE_bagged_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_bagged_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  bagged_28 <- randomForest(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,mtry = 16,data = train,importance = T)
+  yhat28 <- predict(bagged_28,newdata = test)
+  MSE_bagged_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_bagged_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # XgBoosting
+  
+  Xgboost_7 <-train(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "xgbTree",
+  trControl = trainControl("cv", number = 5))
+  yhat7 <- predict(Xgboost_7,newdata = test)
+  MSE_Xgboost_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_Xgboost_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  Xgboost_28 <-train(
+  X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct, data = train, method = "xgbTree",
+  trControl = trainControl("cv", number = 5)
+  )
+  yhat28 <- predict(Xgboost_28,newdata = test)
+  MSE_Xgboost_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_Xgboost_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Random forest
+  control_rf <- trainControl(method = "repeatedcv",number = 5,repeats = 3,search = "grid")
+  
+  tunegrid_rf <- expand.grid(mtry = c(2:8))
+  rf_7 <- train(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+  yhat7 <- predict(rf_7,newdata = test)
+  MSE_RF_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_RF_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  tunegrid_rf <- expand.grid(mtry = c(2:8))
+  rf_28 <- train(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,methods = "rf",metric = "RMSE",tuneGrid = tunegrid_rf, trControl = control_rf)
+  yhat28 <- predict(rf_28,newdata = test)
+  MSE_RF_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_RF_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  # Extremely random forests
+  control_et = trainControl(method = "cv", number = 5)
+  
+  et_grid <- expand.grid(mtry = 2:15,numRandomCuts = 1:5)
+  et_7 <- train(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat7 <- predict(et_7,newdata = test)
+  MSE_ET_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_ET_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  et_grid <- expand.grid(mtry = 2:15,numRandomCuts = 1:5)
+  et_28 <- train(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat28 <- predict(et_28,newdata = test)
+  MSE_ET_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_ET_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  }
+  # mean of sets
+  sumtable_Time_series <<- data.frame("Linear_MSE" = 0.00689476*sqrt(c(mean(MSE_linear_7),mean(MSE_linear_28))),"Linear_R2" = c(mean(R2_linear_7),mean(R2_linear_28)),"KNN_MSE" = 0.00689476*sqrt(c(mean(MSE_KNN_7),mean(MSE_KNN_28))),"KNN_R2" = c(mean(R2_KNN_7),mean(R2_KNN_28)), "Bagged_MSE" = 0.00689476*sqrt(c(mean(MSE_bagged_7),mean(MSE_bagged_28))), "Bagged _R2" = c(mean(R2_bagged_7),mean(R2_bagged_28)), "Xgboost_MSE" = 0.00689476*sqrt(c(mean(MSE_Xgboost_7),mean(MSE_Xgboost_28))),"Xgboost_R2" = c(mean(R2_Xgboost_7),mean(R2_Xgboost_28)),"RF_MSE" = 0.00689476*sqrt(c(mean(MSE_RF_7),mean(MSE_RF_28))),"RF_R2" = c(mean(R2_RF_7),mean(R2_RF_28)) ,"ET_MSE" = 0.00689476*sqrt(c(mean(MSE_ET_7),mean(MSE_ET_28))),"ET_R2" = c(mean(R2_ET_7),mean(R2_ET_28)))
+  
+print(sumtable_Time_series)
+} 
+
+
+ptm <- proc.time()
+cv_function_time_series(result.data.3)
+proc.time() - ptm
+```
+
+- ET
+```{r}
+cv_function_time_series_et <- function(x){
+  # Empty sets
+  # MSE_linear_7 <- c()
+  # MSE_linear_28 <- c()
+  # MSE_KNN_7 <- c()
+  # MSE_KNN_28 <- c()
+  # MSE_bagged_7 <- c()
+  # MSE_bagged_28 <- c()
+  # MSE_Xgboost_3 <- c()
+  # MSE_Xgboost_7 <- c()
+  # MSE_Xgboost_28 <- c()
+  # MSE_RF_7 <- c()
+  # MSE_RF_28 <- c()
+  MSE_ET_7 <- c()
+  MSE_ET_28 <- c()
+  # R2_linear_7 <- c()
+  # R2_linear_28 <- c()
+  # R2_KNN_7 <- c()
+  # R2_KNN_28 <- c()
+  # R2_bagged_7 <- c()
+  # R2_bagged_28 <- c()
+  # R2_Xgboost_7 <- c()
+  # R2_Xgboost_28 <- c()
+  # R2_RF_7 <- c()
+  # R2_RF_28 <- c()
+  R2_ET_7 <- c()
+  R2_ET_28 <- c()
+  
+  # for loop
+  for(i in 1:30){
+  set.seed(10*i + (i^2 + 1))
+  index <- sample(1:2194,1756); train <- x[index,]; test<- x[-index,]
+  test_y_3 <- test$X3d.strength..psi.; test_y_7 <- test$X7d.strength..psi.; test_y_28 <- test$X28d.strength..psi.
+  
+  # Extremely random forests
+  control_et = trainControl(method = "cv", number = 5)
+  
+  et_grid <- expand.grid(mtry = 2:16,numRandomCuts = 1:5)
+  et_7 <- train(X7d.strength..psi. ~ X3d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat7 <- predict(et_7,newdata = test)
+  MSE_ET_7[i] <- mean((yhat7 - test[,18])^2)
+  R2_ET_7[i] <- 1 - sum((yhat7 - test_y_7)^2) / sum((test_y_7 - mean(test_y_7))^2)
+  
+  et_grid <- expand.grid(mtry = 2:16,numRandomCuts = 1:5)
+  et_28 <- train(X28d.strength..psi. ~ X7d.strength..psi. + FIneness..m2.kg. + SO3.... + CaO.... + Al2O3.... + SiO2.... + Fe2O3....+C3S_pct+C2S_pct+C3A_pct+C4AF_pct+FreeCaO_pct+MgO_pct+Na2O_pct+K2O_pct+LOI_pct,data = train,method = "extraTrees",numThreads = 4, tuneGrid = et_grid,trControl = control_et)
+  yhat28 <- predict(et_28,newdata = test)
+  MSE_ET_28[i] <- mean((yhat28 - test[,19])^2)
+  R2_ET_28[i] <- 1 - sum((yhat28 - test_y_28)^2) / sum((test_y_28 - mean(test_y_28))^2)
+  
+  }
+  # mean of sets
+  sumtable_Time_series <<- data.frame("ET_MSE" = 0.00689476*sqrt(c(mean(MSE_ET_7),mean(MSE_ET_28))),"ET_R2" = c(mean(R2_ET_7),mean(R2_ET_28)))
+  
+print(sumtable_Time_series)
+} 
+
+ptm <- proc.time()
+cv_function_time_series_et(result.data.3)
+proc.time() - ptm
+```
+
